@@ -1,0 +1,38 @@
+# SQL Server files
+*.bak
+*.tmp
+*.log
+
+# Temporary files
+*~
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Test results
+TestResults/
+*.trx
+
+# Sensitive information
+*.key
+*.pem
+connection_strings.txt
+
+# Git setup scripts (exclude from repository)
+*.ps1
+*.sh
+*.bat
+init-git-repo.ps1
+advanced-git-setup.ps1
+quick-git-setup.sh
+setup-git.bat
+GIT_SETUP_GUIDE.md
