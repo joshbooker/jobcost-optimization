@@ -160,20 +160,8 @@ inner join Erp.PORel as [PORel2] on
 where ( not JobOper5.OpCode IN ('OMC-OVOP', 'OMP-OVOP')  
 and JobHead5.JobClosed = 0  
 and JobHead5.JobFirm = 1  ))
- ,[DetailComplete] as 
+ ,[LastOpNotInspection] as 
 (select  
-	[JobHead6].[Company] as [JobHead6_Company], 
-	[JobHead6].[JobNum] as [JobHead6_JobNum], 
-	[JobAsmbl6].[AssemblySeq] as [JobAsmbl6_AssemblySeq], 
-	(SUM(LaborDtl1.LaborQty)) as [Calculated_TotalLaborQty], 
-	[JobHead6].[ProdQty] as [JobHead6_ProdQty] 
-
-from Erp.JobHead as [JobHead6]
-inner join Erp.JobAsmbl as [JobAsmbl6] on 
-	  JobHead6.Company = JobAsmbl6.Company
-	and  JobHead6.JobNum = JobAsmbl6.JobNum
-	and ( JobAsmbl6.AssemblySeq = JobHead6_LastOp.JobOperSub_AssemblySeq  )
-inner join  (select  
 	[JobOperSub].[Company] as [JobOperSub_Company], 
 	[JobOperSub].[JobNum] as [JobOperSub_JobNum], 
 	[JobOperSub].[AssemblySeq] as [JobOperSub_AssemblySeq], 
@@ -184,20 +172,30 @@ where ( JobOperSub.OpCode <> '9-OP'  )
 group by 
 	[JobOperSub].[Company], 
 	[JobOperSub].[JobNum], 
-	[JobOperSub].[AssemblySeq])  as [JobHead6_LastOp] on 
-	  JobHead6.Company = JobHead6_LastOp.JobOperSub_Company
-	and  JobHead6.JobNum = JobHead6_LastOp.JobOperSub_JobNum
+	[JobOperSub].[AssemblySeq])
+ ,[DetailComplete] as 
+(select  
+	[LastOpNotInspection1].[JobOperSub_Company] as [JobHead6_Company], 
+	[LastOpNotInspection1].[JobOperSub_JobNum] as [JobHead6_JobNum], 
+	[LastOpNotInspection1].[JobOperSub_AssemblySeq] as [JobAsmbl6_AssemblySeq], 
+	(SUM(LaborDtl1.LaborQty)) as [Calculated_TotalLaborQty], 
+	[JobHead6].[ProdQty] as [JobHead6_ProdQty] 
+
+from  LastOpNotInspection  as [LastOpNotInspection1]
+inner join Erp.JobHead as [JobHead6] on 
+	  LastOpNotInspection1.JobOperSub_Company = JobHead6.Company
+	and  LastOpNotInspection1.JobOperSub_JobNum = JobHead6.JobNum
 inner join Erp.LaborDtl as [LaborDtl1] on 
-	  JobHead6_LastOp.JobOperSub_Company = LaborDtl1.Company
-	and  JobHead6_LastOp.JobOperSub_JobNum = LaborDtl1.JobNum
-	and  JobHead6_LastOp.JobOperSub_AssemblySeq = LaborDtl1.AssemblySeq
-	and  JobHead6_LastOp.Calculated_LastOpNotInsp = LaborDtl1.OprSeq
+	  LastOpNotInspection1.JobOperSub_Company = LaborDtl1.Company
+	and  LastOpNotInspection1.JobOperSub_JobNum = LaborDtl1.JobNum
+	and  LastOpNotInspection1.JobOperSub_AssemblySeq = LaborDtl1.AssemblySeq
+	and  LastOpNotInspection1.Calculated_LastOpNotInsp = LaborDtl1.OprSeq
 where ( JobHead6.JobClosed = 0  
 and JobHead6.JobFirm = 1  )
 group by 
-	[JobHead6].[Company], 
-	[JobHead6].[JobNum], 
-	[JobAsmbl6].[AssemblySeq], 
+	[LastOpNotInspection1].[JobOperSub_Company], 
+	[LastOpNotInspection1].[JobOperSub_JobNum], 
+	[LastOpNotInspection1].[JobOperSub_AssemblySeq], 
 	[JobHead6].[ProdQty])
  ,[JobStatusBase] as 
 (select distinct 
@@ -223,7 +221,7 @@ group by
 		0 
 	END) as [Calculated_NewIP2], 
 	(CASE 
-		WHEN COALESCE(DetailComplete1.Calculated_TotalLaborQty, 0) >= JobHead8.ProdQty THEN 1 
+		WHEN COALESCE(DetailComplete1.Calculated_TotalLaborQty, 0) >= COALESCE(DetailComplete1.JobHead6_ProdQty, 0) THEN 1 
 	ELSE 
 		0 
 	END) as [Calculated_DetailComplete] 
@@ -232,23 +230,22 @@ from Erp.JobHead as [JobHead8]
 left outer join Erp.JobAsmbl as [JobAsmbl8] on 
 	  JobHead8.Company = JobAsmbl8.Company
 	and  JobHead8.JobNum = JobAsmbl8.JobNum
-	and ( JobAsmbl8.AssemblySeq = DetailComplete1.JobAsmbl6_AssemblySeq  )
 left outer join  MtlIssued  as [MtlIssued1] on 
-	  JobAsmbl8.Company = MtlIssued1.JobHead_Company
-	and  JobAsmbl8.JobNum = MtlIssued1.JobHead_JobNum
-	and  JobAsmbl8.AssemblySeq = MtlIssued1.JobAsmbl_AssemblySeq
+	  JobAsmbl8.Company = MtlIssued1.JobHead1_Company
+	and  JobAsmbl8.JobNum = MtlIssued1.JobHead1_JobNum
+	and  JobAsmbl8.AssemblySeq = MtlIssued1.JobAsmbl1_AssemblySeq
 left outer join  HeatTreat  as [HeatTreat1] on 
-	  JobAsmbl8.Company = HeatTreat1.JobHead_Company
-	and  JobAsmbl8.JobNum = HeatTreat1.JobHead_JobNum
-	and  JobAsmbl8.AssemblySeq = HeatTreat1.JobAsmbl_AssemblySeq
+	  JobAsmbl8.Company = HeatTreat1.JobHead2_Company
+	and  JobAsmbl8.JobNum = HeatTreat1.JobHead2_JobNum
+	and  JobAsmbl8.AssemblySeq = HeatTreat1.JobAsmbl2_AssemblySeq
 left outer join  Farmout  as [Farmout1] on 
-	  JobAsmbl8.Company = Farmout1.JobHead2_Company
-	and  JobAsmbl8.JobNum = Farmout1.JobHead2_JobNum
-	and  JobAsmbl8.AssemblySeq = Farmout1.JobAsmbl2_AssemblySeq
+	  JobAsmbl8.Company = Farmout1.JobHead3_Company
+	and  JobAsmbl8.JobNum = Farmout1.JobHead3_JobNum
+	and  JobAsmbl8.AssemblySeq = Farmout1.JobAsmbl3_AssemblySeq
 left outer join  OVNotFinal  as [OVNotFinal1] on 
-	  JobAsmbl8.Company = OVNotFinal1.JobHead3_Company
-	and  JobAsmbl8.JobNum = OVNotFinal1.JobHead3_JobNum
-	and  JobAsmbl8.AssemblySeq = OVNotFinal1.JobAsmbl3_AssemblySeq
+	  JobAsmbl8.Company = OVNotFinal1.JobHead4_Company
+	and  JobAsmbl8.JobNum = OVNotFinal1.JobHead4_JobNum
+	and  JobAsmbl8.AssemblySeq = OVNotFinal1.JobAsmbl4_AssemblySeq
 left outer join  OVFinalOrBack  as [OVFinalOrBack1] on 
 	  JobAsmbl8.Company = OVFinalOrBack1.JobHead5_Company
 	and  JobAsmbl8.JobNum = OVFinalOrBack1.JobHead5_JobNum
@@ -261,7 +258,9 @@ left outer join  DetailComplete  as [DetailComplete1] on
 	  JobHead8.Company = DetailComplete1.JobHead6_Company
 	and  JobHead8.JobNum = DetailComplete1.JobHead6_JobNum
 where ( JobHead8.JobClosed = 0  
-and JobHead8.JobFirm = 1  ))
+and JobHead8.JobFirm = 1  
+and (DetailComplete1.JobAsmbl6_AssemblySeq is null 
+or JobAsmbl8.AssemblySeq = DetailComplete1.JobAsmbl6_AssemblySeq ) ))
  ,[JobStatusWithInProcess] as 
 (select  
 	(CASE 

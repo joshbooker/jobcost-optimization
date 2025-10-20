@@ -134,18 +134,17 @@ LastOpNotInspection AS (
 -- Detail completion check
 DetailComplete AS (
     SELECT 
-        [JobHead6].[Company] as [JobHead6_Company], 
-        [JobHead6].[JobNum] as [JobHead6_JobNum], 
-        [JobAsmbl6].[AssemblySeq] as [JobAsmbl6_AssemblySeq],
+        [LastOpNotInspection1].[JobOperSub_Company] as [JobHead6_Company], 
+        [LastOpNotInspection1].[JobOperSub_JobNum] as [JobHead6_JobNum], 
+        [LastOpNotInspection1].[JobOperSub_AssemblySeq] as [JobAsmbl6_AssemblySeq],
         SUM([LaborDtl1].[LaborQty]) as [Calculated_TotalLaborQty],
         [JobHead6].[ProdQty] as [JobHead6_ProdQty]
-    FROM Erp.JobHead as [JobHead6]
-    INNER JOIN Erp.JobAsmbl as [JobAsmbl6] ON [JobHead6].[Company] = [JobAsmbl6].[Company] AND [JobHead6].[JobNum] = [JobAsmbl6].[JobNum]
-    INNER JOIN LastOpNotInspection as [LastOpNotInspection1] ON [JobHead6].[Company] = [LastOpNotInspection1].[JobOperSub_Company] AND [JobHead6].[JobNum] = [LastOpNotInspection1].[JobOperSub_JobNum] AND [JobAsmbl6].[AssemblySeq] = [LastOpNotInspection1].[JobOperSub_AssemblySeq]
+    FROM LastOpNotInspection as [LastOpNotInspection1]
+    INNER JOIN Erp.JobHead as [JobHead6] ON [LastOpNotInspection1].[JobOperSub_Company] = [JobHead6].[Company] AND [LastOpNotInspection1].[JobOperSub_JobNum] = [JobHead6].[JobNum]
     INNER JOIN Erp.LaborDtl as [LaborDtl1] ON [LastOpNotInspection1].[JobOperSub_Company] = [LaborDtl1].[Company] AND [LastOpNotInspection1].[JobOperSub_JobNum] = [LaborDtl1].[JobNum] AND [LastOpNotInspection1].[JobOperSub_AssemblySeq] = [LaborDtl1].[AssemblySeq] AND [LastOpNotInspection1].[Calculated_LastOpNotInsp] = [LaborDtl1].[OprSeq]
     WHERE [JobHead6].[JobClosed] = 0 
       AND [JobHead6].[JobFirm] = 1
-    GROUP BY [JobHead6].[Company], [JobHead6].[JobNum], [JobAsmbl6].[AssemblySeq], [JobHead6].[ProdQty]
+    GROUP BY [LastOpNotInspection1].[JobOperSub_Company], [LastOpNotInspection1].[JobOperSub_JobNum], [LastOpNotInspection1].[JobOperSub_AssemblySeq], [JobHead6].[ProdQty]
 ),
 
 -- Single base query for all assemblies (Change #1 - Eliminate duplication)
@@ -172,28 +171,43 @@ JobStatusBase AS (
             ELSE 0 
         END as [Calculated_NewIP2],
         CASE 
-            WHEN COALESCE([DetailComplete1].[Calculated_TotalLaborQty], 0) >= [JobHead8].[ProdQty] THEN 1 
+            WHEN COALESCE([DetailComplete1].[Calculated_TotalLaborQty], 0) >= COALESCE([DetailComplete1].[JobHead6_ProdQty], 0) THEN 1 
             ELSE 0 
         END as [Calculated_DetailComplete]
     FROM Erp.JobHead as [JobHead8]
     LEFT JOIN Erp.JobAsmbl as [JobAsmbl8] ON [JobHead8].[Company] = [JobAsmbl8].[Company] AND [JobHead8].[JobNum] = [JobAsmbl8].[JobNum]
-    LEFT JOIN MtlIssued as [MtlIssued1] ON [JobAsmbl8].[Company] = [MtlIssued1].[JobHead_Company] AND [JobAsmbl8].[JobNum] = [MtlIssued1].[JobHead_JobNum] AND [JobAsmbl8].[AssemblySeq] = [MtlIssued1].[JobAsmbl_AssemblySeq]
-    LEFT JOIN HeatTreat as [HeatTreat1] ON [JobAsmbl8].[Company] = [HeatTreat1].[JobHead_Company] AND [JobAsmbl8].[JobNum] = [HeatTreat1].[JobHead_JobNum] AND [JobAsmbl8].[AssemblySeq] = [HeatTreat1].[JobAsmbl_AssemblySeq]
-    LEFT JOIN Farmout as [Farmout1] ON [JobAsmbl8].[Company] = [Farmout1].[JobHead2_Company] AND [JobAsmbl8].[JobNum] = [Farmout1].[JobHead2_JobNum] AND [JobAsmbl8].[AssemblySeq] = [Farmout1].[JobAsmbl2_AssemblySeq]
-    LEFT JOIN OVNotFinal as [OVNotFinal1] ON [JobAsmbl8].[Company] = [OVNotFinal1].[JobHead3_Company] AND [JobAsmbl8].[JobNum] = [OVNotFinal1].[JobHead3_JobNum] AND [JobAsmbl8].[AssemblySeq] = [OVNotFinal1].[JobAsmbl3_AssemblySeq]
+    LEFT JOIN MtlIssued as [MtlIssued1] ON [JobAsmbl8].[Company] = [MtlIssued1].[JobHead1_Company] AND [JobAsmbl8].[JobNum] = [MtlIssued1].[JobHead1_JobNum] AND [JobAsmbl8].[AssemblySeq] = [MtlIssued1].[JobAsmbl1_AssemblySeq]
+    LEFT JOIN HeatTreat as [HeatTreat1] ON [JobAsmbl8].[Company] = [HeatTreat1].[JobHead2_Company] AND [JobAsmbl8].[JobNum] = [HeatTreat1].[JobHead2_JobNum] AND [JobAsmbl8].[AssemblySeq] = [HeatTreat1].[JobAsmbl2_AssemblySeq]
+    LEFT JOIN Farmout as [Farmout1] ON [JobAsmbl8].[Company] = [Farmout1].[JobHead3_Company] AND [JobAsmbl8].[JobNum] = [Farmout1].[JobHead3_JobNum] AND [JobAsmbl8].[AssemblySeq] = [Farmout1].[JobAsmbl3_AssemblySeq]
+    LEFT JOIN OVNotFinal as [OVNotFinal1] ON [JobAsmbl8].[Company] = [OVNotFinal1].[JobHead4_Company] AND [JobAsmbl8].[JobNum] = [OVNotFinal1].[JobHead4_JobNum] AND [JobAsmbl8].[AssemblySeq] = [OVNotFinal1].[JobAsmbl4_AssemblySeq]
     LEFT JOIN OVFinalOrBack as [OVFinalOrBack1] ON [JobAsmbl8].[Company] = [OVFinalOrBack1].[JobHead5_Company] AND [JobAsmbl8].[JobNum] = [OVFinalOrBack1].[JobHead5_JobNum] AND [JobAsmbl8].[AssemblySeq] = [OVFinalOrBack1].[JobAsmbl5_AssemblySeq]
     LEFT JOIN LaborSummary as [LaborSummary1] ON [JobAsmbl8].[Company] = [LaborSummary1].[LaborDtl_Company] AND [JobAsmbl8].[JobNum] = [LaborSummary1].[LaborDtl_JobNum] AND [JobAsmbl8].[AssemblySeq] = [LaborSummary1].[LaborDtl_AssemblySeq]
-    LEFT JOIN DetailComplete as [DetailComplete1] ON [JobHead8].[Company] = [DetailComplete1].[JobHead6_Company] AND [JobHead8].[JobNum] = [DetailComplete1].[JobHead6_JobNum] AND [JobAsmbl8].[AssemblySeq] = [DetailComplete1].[JobAsmbl6_AssemblySeq]
+    LEFT JOIN DetailComplete as [DetailComplete1] ON [JobHead8].[Company] = [DetailComplete1].[JobHead6_Company] AND [JobHead8].[JobNum] = [DetailComplete1].[JobHead6_JobNum]
     -- Early filtering (Change #6)
     WHERE [JobHead8].[JobClosed] = 0 
       AND [JobHead8].[JobFirm] = 1
+      AND ([DetailComplete1].[JobAsmbl6_AssemblySeq] IS NULL OR [JobAsmbl8].[AssemblySeq] = [DetailComplete1].[JobAsmbl6_AssemblySeq])
 ),
 
 -- Calculate InProcess status with simplified logic
 JobStatusWithInProcess AS (
-    SELECT *,
+    SELECT 
+        [JobStatusBase1].[JobHead8_Company] as [JobStatusBase1_JobHead8_Company],
+        [JobStatusBase1].[JobHead8_JobNum] as [JobStatusBase1_JobHead8_JobNum],
+        [JobStatusBase1].[JobHead8_PartNum] as [JobStatusBase1_JobHead8_PartNum],
+        [JobStatusBase1].[JobAsmbl8_AssemblySeq] as [JobStatusBase1_JobAsmbl8_AssemblySeq],
+        [JobStatusBase1].[JobAsmbl8_PartNum] as [JobStatusBase1_JobAsmbl8_PartNum],
+        [JobStatusBase1].[Calculated_MtlIssued] as [Calculated_MtlIssued],
+        [JobStatusBase1].[Calculated_BackFromHT] as [Calculated_BackFromHT],
+        [JobStatusBase1].[Calculated_Farmout] as [Calculated_Farmout],
+        [JobStatusBase1].[Calculated_OVNotFinal] as [Calculated_OVNotFinal],
+        [JobStatusBase1].[Calculated_OVFinalOrBack] as [Calculated_OVFinalOrBack],
+        [JobStatusBase1].[Calculated_TotalLaborHrs] as [Calculated_TotalLaborHrs],
+        [JobStatusBase1].[Calculated_NewIP] as [Calculated_NewIP],
+        [JobStatusBase1].[Calculated_NewIP2] as [Calculated_NewIP2],
+        [JobStatusBase1].[Calculated_DetailComplete] as [Calculated_DetailComplete],
         CASE 
-            WHEN ([Calculated_NewIP] = 1 OR [Calculated_NewIP2] = 1) THEN 1 
+            WHEN ([JobStatusBase1].[Calculated_NewIP] = 1 OR [JobStatusBase1].[Calculated_NewIP2] = 1) THEN 1 
             ELSE 0 
         END as [Calculated_InProcess]
     FROM JobStatusBase as [JobStatusBase1]
@@ -201,14 +215,29 @@ JobStatusWithInProcess AS (
 
 -- Calculate status for each assembly
 JobStatusWithStatus AS (
-    SELECT *,
+    SELECT 
+        [JobStatusWithInProcess1].[JobStatusBase1_JobHead8_Company] as [JobStatusWithInProcess1_JobHead8_Company],
+        [JobStatusWithInProcess1].[JobStatusBase1_JobHead8_JobNum] as [JobStatusWithInProcess1_JobHead8_JobNum],
+        [JobStatusWithInProcess1].[JobStatusBase1_JobHead8_PartNum] as [JobStatusWithInProcess1_JobHead8_PartNum],
+        [JobStatusWithInProcess1].[JobStatusBase1_JobAsmbl8_AssemblySeq] as [JobStatusWithInProcess1_JobAsmbl8_AssemblySeq],
+        [JobStatusWithInProcess1].[JobStatusBase1_JobAsmbl8_PartNum] as [JobStatusWithInProcess1_JobAsmbl8_PartNum],
+        [JobStatusWithInProcess1].[Calculated_MtlIssued] as [Calculated_MtlIssued],
+        [JobStatusWithInProcess1].[Calculated_BackFromHT] as [Calculated_BackFromHT],
+        [JobStatusWithInProcess1].[Calculated_Farmout] as [Calculated_Farmout],
+        [JobStatusWithInProcess1].[Calculated_OVNotFinal] as [Calculated_OVNotFinal],
+        [JobStatusWithInProcess1].[Calculated_OVFinalOrBack] as [Calculated_OVFinalOrBack],
+        [JobStatusWithInProcess1].[Calculated_TotalLaborHrs] as [Calculated_TotalLaborHrs],
+        [JobStatusWithInProcess1].[Calculated_NewIP] as [Calculated_NewIP],
+        [JobStatusWithInProcess1].[Calculated_NewIP2] as [Calculated_NewIP2],
+        [JobStatusWithInProcess1].[Calculated_DetailComplete] as [Calculated_DetailComplete],
+        [JobStatusWithInProcess1].[Calculated_InProcess] as [Calculated_InProcess],
         CASE
-            WHEN [Calculated_OVFinalOrBack] = 1 THEN 6
-            WHEN [Calculated_OVNotFinal] = 1 THEN 5
-            WHEN [Calculated_InProcess] = 1 THEN 4
-            WHEN [Calculated_Farmout] = 1 THEN 3
-            WHEN [Calculated_BackFromHT] = 1 THEN 2
-            WHEN [Calculated_MtlIssued] = 1 THEN 1
+            WHEN [JobStatusWithInProcess1].[Calculated_OVFinalOrBack] = 1 THEN 6
+            WHEN [JobStatusWithInProcess1].[Calculated_OVNotFinal] = 1 THEN 5
+            WHEN [JobStatusWithInProcess1].[Calculated_InProcess] = 1 THEN 4
+            WHEN [JobStatusWithInProcess1].[Calculated_Farmout] = 1 THEN 3
+            WHEN [JobStatusWithInProcess1].[Calculated_BackFromHT] = 1 THEN 2
+            WHEN [JobStatusWithInProcess1].[Calculated_MtlIssued] = 1 THEN 1
             ELSE 0
         END as [Calculated_Status]
     FROM JobStatusWithInProcess as [JobStatusWithInProcess1]
@@ -217,31 +246,31 @@ JobStatusWithStatus AS (
 -- Top level status (AssemblySeq = 0)
 TopStatus AS (
     SELECT 
-        [JobHead8_Company],
-        [JobHead8_JobNum],
-        [Calculated_Status] as [Calculated_TopStatus]
+        [JobStatusWithStatus1].[JobStatusWithInProcess1_JobHead8_Company] as [TopStatus_JobHead8_Company],
+        [JobStatusWithStatus1].[JobStatusWithInProcess1_JobHead8_JobNum] as [TopStatus_JobHead8_JobNum],
+        [JobStatusWithStatus1].[Calculated_Status] as [Calculated_TopStatus]
     FROM JobStatusWithStatus as [JobStatusWithStatus1]
-    WHERE [JobAsmbl8_AssemblySeq] = 0
+    WHERE [JobStatusWithStatus1].[JobStatusWithInProcess1_JobAsmbl8_AssemblySeq] = 0
 ),
 
 -- Assembly level status (AssemblySeq <> 0, incomplete only)
 AsmStatus AS (
     SELECT 
-        [JobHead8_JobNum],
-        [Calculated_Status]
+        [JobStatusWithStatus2].[JobStatusWithInProcess1_JobHead8_JobNum] as [AsmStatus_JobHead8_JobNum],
+        [JobStatusWithStatus2].[Calculated_Status] as [AsmStatus_Calculated_Status]
     FROM JobStatusWithStatus as [JobStatusWithStatus2]
-    WHERE [Calculated_DetailComplete] = 0 
-      AND [JobAsmbl8_AssemblySeq] <> 0
+    WHERE [JobStatusWithStatus2].[Calculated_DetailComplete] = 0 
+      AND [JobStatusWithStatus2].[JobStatusWithInProcess1_JobAsmbl8_AssemblySeq] <> 0
 )
 
 -- Final result with fallback logic
 SELECT  
-    [TopStatus1].[JobHead8_Company] as [JobHead8_Company],
-    COALESCE([AsmStatus1].[JobHead8_JobNum], [TopStatus1].[JobHead8_JobNum]) as [Calculated_JobNum],
+    [TopStatus1].[TopStatus_JobHead8_Company] as [JobHead8_Company],
+    COALESCE([AsmStatus1].[AsmStatus_JobHead8_JobNum], [TopStatus1].[TopStatus_JobHead8_JobNum]) as [Calculated_JobNum],
     CASE
-        WHEN [TopStatus1].[Calculated_TopStatus] = 0 THEN COALESCE([AsmStatus1].[Calculated_Status], 0)
-        WHEN [AsmStatus1].[Calculated_Status] < [TopStatus1].[Calculated_TopStatus] THEN [AsmStatus1].[Calculated_Status]
+        WHEN [TopStatus1].[Calculated_TopStatus] = 0 THEN COALESCE([AsmStatus1].[AsmStatus_Calculated_Status], 0)
+        WHEN [AsmStatus1].[AsmStatus_Calculated_Status] < [TopStatus1].[Calculated_TopStatus] THEN [AsmStatus1].[AsmStatus_Calculated_Status]
         ELSE [TopStatus1].[Calculated_TopStatus]
     END as [Calculated_Status]
 FROM TopStatus as [TopStatus1]
-LEFT JOIN AsmStatus as [AsmStatus1] ON [TopStatus1].[JobHead8_JobNum] = [AsmStatus1].[JobHead8_JobNum];
+LEFT JOIN AsmStatus as [AsmStatus1] ON [TopStatus1].[TopStatus_JobHead8_JobNum] = [AsmStatus1].[AsmStatus_JobHead8_JobNum];
