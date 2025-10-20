@@ -7,6 +7,7 @@ The tool adds the table/CTE alias as a prefix to output field names, then refere
 ---
 
 ## **Quick Reference:**
+0. **Unique Alias Strategy**: Use sequential numbering to prevent table alias conflicts (JobHead1, JobHead2, JobHead3, etc.)
 1. **Base fields**: `[Alias].[Field] as [Alias_Field]`
 2. **New calculations**: `CASE ... as [Calculated_Name]`  
 3. **Pass-through**: `[CTE].[PrevField] as [CTE_PrevField]`
@@ -14,6 +15,54 @@ The tool adds the table/CTE alias as a prefix to output field names, then refere
 5. **Build progressively**: Each CTE adds its alias to field names
 
 **Key insight**: Your tool expects to find the field names it references, so pre-build those exact names in your SELECT clauses!
+
+---
+
+## **Rule 0: Unique Alias Strategy**
+
+**Pattern:** Use sequential numbering to prevent table alias conflicts when the same table appears multiple times.
+
+```sql
+-- ✅ CORRECT: Sequential numbering for unique aliases
+JobStatusBase AS (
+    SELECT 
+        [JobHead1].[Company] as [JobHead1_Company],
+        [JobHead1].[JobNum] as [JobHead1_JobNum]
+    FROM Erp.JobHead as [JobHead1]
+    ...
+),
+
+DetailComplete AS (
+    SELECT 
+        [JobHead2].[Company] as [JobHead2_Company],
+        [JobHead2].[JobNum] as [JobHead2_JobNum]
+    FROM Erp.JobHead as [JobHead2]
+    ...
+),
+
+-- ❌ WRONG: Reusing same alias causes conflicts
+JobStatusBase AS (
+    SELECT 
+        [JobHead].[Company] as [JobHead_Company],
+        [JobHead].[JobNum] as [JobHead_JobNum]
+    FROM Erp.JobHead as [JobHead]
+    ...
+),
+
+DetailComplete AS (
+    SELECT 
+        [JobHead].[Company] as [JobHead_Company],  -- CONFLICT!
+        [JobHead].[JobNum] as [JobHead_JobNum]     -- CONFLICT!
+    FROM Erp.JobHead as [JobHead]
+    ...
+)
+```
+
+**Why this works:**
+- Prevents alias name collisions across CTEs
+- Each table instance has a unique identifier
+- Tool can distinguish between JobHead1_Company and JobHead2_Company
+- Maintains clear relationship between alias and output field name
 
 ---
 
