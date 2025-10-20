@@ -23,7 +23,9 @@ The tool adds the table/CTE alias as a prefix to output field names, then refere
 ---
 
 
-## **Rule 0: No SELECT \***
+
+<details>
+<summary><strong>Rule 0: No SELECT *</strong></summary>
 
 **Pattern:** Always explicitly list all fields in SELECT statements. Never use `SELECT *` in any CTE or query.
 
@@ -42,10 +44,13 @@ SELECT * FROM ...
 ```
 
 **Critical:** SELECT * will break field name consistency and cause tool conversion failures. Always enumerate every field explicitly, using the correct prefixing and naming rules above.
+</details>
 
 ---
 
-## **Rule 1: Unique Alias Strategy**
+
+<details>
+<summary><strong>Rule 1: Unique Alias Strategy</strong></summary>
 
 **Pattern:** Use sequential numbering to prevent table alias conflicts when the same table appears multiple times.
 
@@ -90,10 +95,13 @@ DetailComplete AS (
 - Each table instance has a unique identifier
 - Tool can distinguish between JobHead1_Company and JobHead2_Company
 - Maintains clear relationship between alias and output field name
+</details>
 
 ---
 
-## **Rule 2: Base Table Fields**
+
+<details>
+<summary><strong>Rule 2: Base Table Fields</strong></summary>
 
 **Pattern:** `[TableAlias].[Field] as [TableAlias_Field]`
 
@@ -120,10 +128,13 @@ SELECT
 -- Tool will reference: JobHead.Company, JobHead.JobNum
 -- But output fields are: [JobHead_Company], [JobHead_JobNum] ❌ MISMATCH!
 ```
+</details>
 
 ---
 
-## **Rule 3: New Calculated Fields**
+
+<details>
+<summary><strong>Rule 3: New Calculated Fields</strong></summary>
 
 **Pattern:** `CASE ... END as [Calculated_Name]` (No prefix needed)
 
@@ -136,141 +147,17 @@ SELECT
 -- Tool Output: [Calculated_IsComplete], [Calculated_MtlIssued]
 -- Tool References: TableAlias.Calculated_IsComplete ✅
 ```
+</details>
 
 ---
 
-## **Rule 4: Extract Complex Subqueries to Separate CTEs**
 
-**Pattern:** `[CTEAlias].[PreviousField] as [CTEAlias_PreviousField]`
-
-```sql
--- ✅ CORRECT Source:
-JobStatusWithStatus AS (
-    SELECT 
-        -- Pass through base fields with CTE prefix
-        [StatusBase].[JobHead_Company] as [StatusBase_JobHead_Company],
-        [StatusBase].[JobAsmbl_AssemblySeq] as [StatusBase_JobAsmbl_AssemblySeq],
-        
-        -- Pass through calculated fields with CTE prefix  
-        [StatusBase].[Calculated_MtlIssued] as [StatusBase_Calculated_MtlIssued],
-        
-        -- New calculation (no prefix needed)
-        CASE WHEN ... END as [Calculated_Status]
-    FROM JobStatusBase as [StatusBase]
-)
-
--- Tool Output:
--- [StatusBase_StatusBase_JobHead_Company], [StatusBase_Calculated_Status]
--- Tool References: StatusBase.StatusBase_JobHead_Company ✅
-```
-
----
-
-## **Rule 5: Passed-Through Fields from Previous CTEs**
-
-**Pattern:** Use the pre-applied prefix in your source WHERE clauses
-
-```sql
--- ✅ CORRECT Source:
-TopStatus AS (
-    SELECT ...
-    FROM JobStatusWithStatus as [WithStatus1]
-    WHERE [WithStatus1].[StatusBase_JobAsmbl_AssemblySeq] = 0
-    --                  ↑ Use the pre-applied prefix
-)
-
--- Tool Output WHERE: WithStatus1.StatusBase_JobAsmbl_AssemblySeq = 0 ✅
-```
-
-```sql
--- ❌ WRONG Source:
-WHERE [WithStatus1].[JobAsmbl_AssemblySeq] = 0  -- No prefix
-
--- Tool Output WHERE: WithStatus1.JobAsmbl_AssemblySeq = 0
--- But actual field is: [StatusBase_JobAsmbl_AssemblySeq] ❌ MISMATCH!
-```
-
----
-
-## **Rule 6: WHERE Clause References**
-
-**Pattern:** Both sides must use pre-applied prefixes
-
-```sql
--- ✅ CORRECT Source:
-FROM TopStatus as [TopLevel]
-LEFT JOIN AsmStatus as [AsmLevel] 
-    ON [TopLevel].[WithStatus1_StatusBase_JobHead_JobNum] = [AsmLevel].[WithStatus2_StatusBase_JobHead_JobNum]
-    --           ↑ Pre-applied prefix                              ↑ Pre-applied prefix
-
--- Tool Output JOIN: 
--- TopLevel.WithStatus1_StatusBase_JobHead_JobNum = AsmLevel.WithStatus2_StatusBase_JobHead_JobNum ✅
-```
-
----
-
-## **Rule 7: JOIN References**
-
-**Build field names progressively through CTEs:**
-
-```sql
--- CTE 1: Base tables
-[JobHead].[Company] as [JobHead_Company]
-
--- CTE 2: Reference CTE 1  
-[StatusBase].[JobHead_Company] as [StatusBase_JobHead_Company]
-
--- CTE 3: Reference CTE 2
-[WithStatus1].[StatusBase_JobHead_Company] as [WithStatus1_StatusBase_JobHead_Company]
-
--- Final SELECT: Reference CTE 3
-[TopLevel].[WithStatus1_StatusBase_JobHead_Company] as [TopLevel_WithStatus1_StatusBase_JobHead_Company]
-```
-
-**Field Evolution Chain:**
-```
-JobHead_Company 
-→ StatusBase_JobHead_Company 
-→ WithStatus1_StatusBase_JobHead_Company 
-→ TopLevel_WithStatus1_StatusBase_JobHead_Company
-```
-
----
-
-## **Complete Example Template:**
-
-```sql
-WITH BaseData AS (
-    SELECT 
-        [Table1].[Field1] as [Table1_Field1],              -- Rule 1: Base fields
-        [Table2].[Field2] as [Table2_Field2],              -- Rule 1: Base fields
-        CASE WHEN ... END as [Calculated_Something]        -- Rule 2: New calculations
-    FROM Schema.Table1 AS [Table1]
-    JOIN Schema.Table2 AS [Table2] ON ...
-),
-
-ProcessedData AS (
-    SELECT 
-        [Base].[Table1_Field1] as [Base_Table1_Field1],         -- Rule 3: Pass-through with prefix
-        [Base].[Calculated_Something] as [Base_Calculated_Something], -- Rule 3: Even calculated gets prefix
-        CASE WHEN ... END as [Calculated_NewField]              -- Rule 2: New calculation
-    FROM BaseData as [Base]
-    WHERE [Base].[Table1_Field1] IS NOT NULL                    -- Rule 4: WHERE uses prefix
-)
-
-SELECT 
-    [Proc].[Base_Table1_Field1] as [Proc_Base_Table1_Field1]    -- Rule 3: Continue chain
-FROM ProcessedData as [Proc]
-WHERE [Proc].[Base_Calculated_Something] = 1                    -- Rule 4: WHERE uses prefix
-```
-
----
-
-## **Rule 8: Field Name Chain Pattern**
+<details>
+<summary><strong>Rule 4: Extract Complex Subqueries to Separate CTEs</strong></summary>
 
 **Pattern:** Replace nested subqueries within CTEs with separate named CTEs to avoid JOIN parsing issues.
 
-### **The Problem: Subquery JOIN Limitations**
+### The Problem: Subquery JOIN Limitations
 
 The SQL-to-BAQ tool has a **critical limitation** with nested subqueries in complex JOINs. It incorrectly moves JOIN conditions between tables, creating invalid references.
 
@@ -304,12 +191,12 @@ inner join Erp.JobAsmbl as [JobAsmbl6] on
 inner join (select ...) as [LastOp] on ...  -- LastOp defined AFTER being referenced
 ```
 
-### **Tested Solutions:**
+### Tested Solutions:
 
 1. **❌ Context Prefixing Failed:** Tried `as [JobHead6_LastOp]` - tool still moved JOIN conditions
 2. **✅ Separate CTEs Work:** Extracting subquery to named CTE resolves the issue
 
-### **The Solution:**
+### The Solution:
 
 ```sql
 -- ✅ CORRECT: Separate CTEs with clear dependencies
@@ -344,14 +231,14 @@ DetailComplete AS (
 )
 ```
 
-### **Why This Works:**
+### Why This Works:
 
 1. **Clear Dependencies**: Tool processes CTEs in linear order without confusion
 2. **Simple JOINs**: No nested subqueries to misparse  
 3. **Proper References**: All CTE references are to previously defined CTEs
 4. **Consistent Prefixing**: Each CTE follows established alias patterns
 
-### **Rule 7 Guidelines:**
+### Rule 4 Guidelines:
 
 - ✅ **Extract** all nested subqueries with aggregations into separate named CTEs
 - ✅ **Use** descriptive CTE names that indicate purpose (LastOpNotInspection vs LastOp)
@@ -365,7 +252,7 @@ DetailComplete AS (
 - ❌ **Never** create forward references to subquery aliases
 - ❌ **Avoid** overlapping field references (like AssemblySeq) across multiple JOINs
 
-### **Critical JOIN Pattern Discovery:**
+### Critical JOIN Pattern Discovery:
 
 **✅ Successful Pattern (works):**
 ```sql
@@ -382,7 +269,7 @@ INNER JOIN Erp.JobAsmbl as [JobAsmbl6] ON [JobHead6].[Company] = [JobAsmbl6].[Co
 INNER JOIN LastOpNotInspection as [LastOpNotInspection1] ON [JobAsmbl6].[AssemblySeq] = [LastOpNotInspection1].[JobOperSub_AssemblySeq]  -- Tool moves this condition!
 ```
 
-### **WHERE Clause Workaround:**
+### WHERE Clause Workaround:
 
 When you must have overlapping field references but can't restructure the query, move the problematic condition to WHERE clause:
 
@@ -405,3 +292,141 @@ WHERE [JobHead8].[JobClosed] = 0
 The tool's parser has issues when the same field name (`AssemblySeq`) appears in multiple JOIN conditions across different table relationships.
 
 **Critical Finding:** The tool's JOIN parser cannot handle complex nested subqueries regardless of alias naming strategies. Separate CTEs with simplified JOINs and WHERE clause workarounds are the only reliable solution for maintaining tool compatibility.
+</details>
+
+---
+
+
+<details>
+<summary><strong>Rule 5: Passed-Through Fields from Previous CTEs</strong></summary>
+
+**Pattern:** `[CTEAlias].[PreviousField] as [CTEAlias_PreviousField]`
+
+```sql
+-- ✅ CORRECT Source:
+JobStatusWithStatus AS (
+    SELECT 
+        -- Pass through base fields with CTE prefix
+        [StatusBase].[JobHead_Company] as [StatusBase_JobHead_Company],
+        [StatusBase].[JobAsmbl_AssemblySeq] as [StatusBase_JobAsmbl_AssemblySeq],
+        -- Pass through calculated fields with CTE prefix  
+        [StatusBase].[Calculated_MtlIssued] as [StatusBase_Calculated_MtlIssued],
+        -- New calculation (no prefix needed)
+        CASE WHEN ... END as [Calculated_Status]
+    FROM JobStatusBase as [StatusBase]
+)
+
+-- Tool Output:
+-- [StatusBase_StatusBase_JobHead_Company], [StatusBase_Calculated_Status]
+-- Tool References: StatusBase.StatusBase_JobHead_Company ✅
+```
+</details>
+
+---
+
+
+<details>
+<summary><strong>Rule 6: WHERE Clause References</strong></summary>
+
+**Pattern:** Use the pre-applied prefix in your source WHERE clauses
+
+```sql
+-- ✅ CORRECT Source:
+TopStatus AS (
+    SELECT ...
+    FROM JobStatusWithStatus as [WithStatus1]
+    WHERE [WithStatus1].[StatusBase_JobAsmbl_AssemblySeq] = 0
+    --                  ↑ Use the pre-applied prefix
+)
+
+-- Tool Output WHERE: WithStatus1.StatusBase_JobAsmbl_AssemblySeq = 0 ✅
+```
+
+```sql
+-- ❌ WRONG Source:
+WHERE [WithStatus1].[JobAsmbl_AssemblySeq] = 0  -- No prefix
+
+-- Tool Output WHERE: WithStatus1.JobAsmbl_AssemblySeq = 0
+-- But actual field is: [StatusBase_JobAsmbl_AssemblySeq] ❌ MISMATCH!
+```
+</details>
+
+---
+
+
+<details>
+<summary><strong>Rule 7: JOIN References</strong></summary>
+
+**Pattern:** Both sides must use pre-applied prefixes
+
+```sql
+-- ✅ CORRECT Source:
+FROM TopStatus as [TopLevel]
+LEFT JOIN AsmStatus as [AsmLevel] 
+    ON [TopLevel].[WithStatus1_StatusBase_JobHead_JobNum] = [AsmLevel].[WithStatus2_StatusBase_JobHead_JobNum]
+    --           ↑ Pre-applied prefix                              ↑ Pre-applied prefix
+
+-- Tool Output JOIN: 
+-- TopLevel.WithStatus1_StatusBase_JobHead_JobNum = AsmLevel.WithStatus2_StatusBase_JobHead_JobNum ✅
+```
+</details>
+
+---
+
+## **Complete Example Template:**
+
+```sql
+WITH BaseData AS (
+    SELECT 
+        [Table1].[Field1] as [Table1_Field1],              -- Rule 1: Base fields
+        [Table2].[Field2] as [Table2_Field2],              -- Rule 1: Base fields
+        CASE WHEN ... END as [Calculated_Something]        -- Rule 2: New calculations
+    FROM Schema.Table1 AS [Table1]
+    JOIN Schema.Table2 AS [Table2] ON ...
+),
+
+ProcessedData AS (
+    SELECT 
+        [Base].[Table1_Field1] as [Base_Table1_Field1],         -- Rule 3: Pass-through with prefix
+        [Base].[Calculated_Something] as [Base_Calculated_Something], -- Rule 3: Even calculated gets prefix
+        CASE WHEN ... END as [Calculated_NewField]              -- Rule 2: New calculation
+    FROM BaseData as [Base]
+    WHERE [Base].[Table1_Field1] IS NOT NULL                    -- Rule 4: WHERE uses prefix
+)
+
+SELECT 
+    [Proc].[Base_Table1_Field1] as [Proc_Base_Table1_Field1]    -- Rule 3: Continue chain
+FROM ProcessedData as [Proc]
+WHERE [Proc].[Base_Calculated_Something] = 1                    -- Rule 4: WHERE uses prefix
+```
+
+---
+
+
+<details>
+<summary><strong>Rule 8: Field Name Chain Pattern</strong></summary>
+
+**Build field names progressively through CTEs:**
+
+```sql
+-- CTE 1: Base tables
+[JobHead].[Company] as [JobHead_Company]
+
+-- CTE 2: Reference CTE 1  
+[StatusBase].[JobHead_Company] as [StatusBase_JobHead_Company]
+
+-- CTE 3: Reference CTE 2
+[WithStatus1].[StatusBase_JobHead_Company] as [WithStatus1_StatusBase_JobHead_Company]
+
+-- Final SELECT: Reference CTE 3
+[TopLevel].[WithStatus1_StatusBase_JobHead_Company] as [TopLevel_WithStatus1_StatusBase_JobHead_Company]
+```
+
+**Field Evolution Chain:**
+```
+JobHead_Company 
+→ StatusBase_JobHead_Company 
+→ WithStatus1_StatusBase_JobHead_Company 
+→ TopLevel_WithStatus1_StatusBase_JobHead_Company
+```
+</details>
