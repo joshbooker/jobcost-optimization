@@ -6,13 +6,13 @@ WITH
 -- Consolidated labor aggregations (Change #4)
 LaborSummary AS (
     SELECT 
-        [LaborDtl].[Company] as [LaborDtl_Company], 
-        [LaborDtl].[JobNum] as [LaborDtl_JobNum], 
-        [LaborDtl].[AssemblySeq] as [LaborDtl_AssemblySeq],
-        SUM([LaborDtl].[LaborHrs]) as [Calculated_TotalLaborHrs],
-        SUM([LaborDtl].[LaborQty]) as [Calculated_TotalLaborQty]
-    FROM Erp.LaborDtl as [LaborDtl]
-    GROUP BY [LaborDtl].[Company], [LaborDtl].[JobNum], [LaborDtl].[AssemblySeq]
+        [ld].[Company] as [LaborDtl_Company], 
+        [ld].[JobNum] as [LaborDtl_JobNum], 
+        [ld].[AssemblySeq] as [LaborDtl_AssemblySeq],
+        SUM([ld].[LaborHrs]) as [Calculated_TotalLaborHrs],
+        SUM([ld].[LaborQty]) as [Calculated_TotalLaborQty]
+    FROM Erp.LaborDtl as [ld]
+    GROUP BY [ld].[Company], [ld].[JobNum], [ld].[AssemblySeq]
 ),
 
 -- Reusable LastOVOp logic (Change #3)
@@ -27,6 +27,8 @@ LastOVOperations AS (
     INNER JOIN Erp.JobOper as [jo] ON [ja].[Company] = [jo].[Company] AND [ja].[JobNum] = [jo].[JobNum] AND [ja].[AssemblySeq] = [jo].[AssemblySeq]
     WHERE [jo].[SubContract] = 1 
       AND [jo].[OpCode] NOT IN ('OMC-OVOP', 'OMP-OVOP')
+      AND [jh].[JobClosed] = 0 
+      AND [jh].[JobFirm] = 1
     GROUP BY [jh].[Company], [jh].[JobNum], [ja].[AssemblySeq]
 ),
 
@@ -41,6 +43,8 @@ MtlIssued AS (
     INNER JOIN Erp.JobAsmbl as [ja] ON [jh].[Company] = [ja].[Company] AND [jh].[JobNum] = [ja].[JobNum]
     INNER JOIN Erp.PartTran as [pt] ON [ja].[Company] = [pt].[Company] AND [ja].[JobNum] = [pt].[JobNum] AND [ja].[AssemblySeq] = [pt].[AssemblySeq]
     WHERE [pt].[TranClass] = 'I' AND [pt].[TranQty] > 0
+      AND [jh].[JobClosed] = 0 
+      AND [jh].[JobFirm] = 1
 ),
 
 -- Heat treatment status
@@ -54,6 +58,8 @@ HeatTreat AS (
     INNER JOIN Erp.JobAsmbl as [ja] ON [jh].[Company] = [ja].[Company] AND [jh].[JobNum] = [ja].[JobNum]
     INNER JOIN Erp.JobOper as [jo] ON [ja].[Company] = [jo].[Company] AND [ja].[JobNum] = [jo].[JobNum] AND [ja].[AssemblySeq] = [jo].[AssemblySeq]
     WHERE [jo].[OpCode] = 'HT-OVOP' AND [jo].[OpComplete] = 1
+      AND [jh].[JobClosed] = 0 
+      AND [jh].[JobFirm] = 1
 ),
 
 -- Farmout operations
@@ -70,6 +76,8 @@ Farmout AS (
     WHERE [jo2].[OpCode] IN ('OMC-OVOP', 'OMP-OVOP') 
       AND [jo2].[OpComplete] = 0 
       AND [pr].[OpenRelease] = 1
+      AND [jh2].[JobClosed] = 0 
+      AND [jh2].[JobFirm] = 1
 ),
 
 -- OV Not Final operations
@@ -89,6 +97,8 @@ OVNotFinal AS (
       AND [jo3].[OpCode] NOT IN ('OMC-OVOP', 'OMP-OVOP')
       AND [jo3].[OprSeq] <> [lov1].[Calculated_LastOVOp]
       AND [pr1].[OpenRelease] = 1
+      AND [jh3].[JobClosed] = 0 
+      AND [jh3].[JobFirm] = 1
 ),
 
 -- OV Final or Back operations
@@ -104,6 +114,8 @@ OVFinalOrBack AS (
     INNER JOIN Erp.JobOper as [jo5] ON [lov].[JobHead_JobNum] = [jo5].[JobNum] AND [lov].[JobAsmbl_AssemblySeq] = [jo5].[AssemblySeq] AND [lov].[Calculated_LastOVOp] = [jo5].[OprSeq]
     INNER JOIN Erp.PORel as [pr2] ON [jo5].[Company] = [pr2].[Company] AND [jo5].[JobNum] = [pr2].[JobNum] AND [jo5].[AssemblySeq] = [pr2].[AssemblySeq] AND [jo5].[OprSeq] = [pr2].[JobSeq]
     WHERE [jo5].[OpCode] NOT IN ('OMC-OVOP', 'OMP-OVOP')
+      AND [jh5].[JobClosed] = 0 
+      AND [jh5].[JobFirm] = 1
 ),
 
 -- Detail completion check
@@ -118,15 +130,17 @@ DetailComplete AS (
     INNER JOIN Erp.JobAsmbl as [ja7] ON [jh7].[Company] = [ja7].[Company] AND [jh7].[JobNum] = [ja7].[JobNum]
     INNER JOIN (
         SELECT 
-            [JobOper].[Company] as [JobOper_Company], 
-            [JobOper].[JobNum] as [JobOper_JobNum], 
-            [JobOper].[AssemblySeq] as [JobOper_AssemblySeq],
-            MAX([JobOper].[OprSeq]) as [Calculated_LastOpNotInsp]
-        FROM Erp.JobOper as [JobOper]
-        WHERE [JobOper].[OpCode] <> '9-OP'
-        GROUP BY [JobOper].[Company], [JobOper].[JobNum], [JobOper].[AssemblySeq]
+            [jo_sub].[Company] as [JobOper_Company], 
+            [jo_sub].[JobNum] as [JobOper_JobNum], 
+            [jo_sub].[AssemblySeq] as [JobOper_AssemblySeq],
+            MAX([jo_sub].[OprSeq]) as [Calculated_LastOpNotInsp]
+        FROM Erp.JobOper as [jo_sub]
+        WHERE [jo_sub].[OpCode] <> '9-OP'
+        GROUP BY [jo_sub].[Company], [jo_sub].[JobNum], [jo_sub].[AssemblySeq]
     ) as [lo] ON [jh7].[Company] = [lo].[JobOper_Company] AND [jh7].[JobNum] = [lo].[JobOper_JobNum] AND [ja7].[AssemblySeq] = [lo].[JobOper_AssemblySeq]
     INNER JOIN Erp.LaborDtl as [ld1] ON [lo].[JobOper_Company] = [ld1].[Company] AND [lo].[JobOper_JobNum] = [ld1].[JobNum] AND [lo].[JobOper_AssemblySeq] = [ld1].[AssemblySeq] AND [lo].[Calculated_LastOpNotInsp] = [ld1].[OprSeq]
+    WHERE [jh7].[JobClosed] = 0 
+      AND [jh7].[JobFirm] = 1
     GROUP BY [jh7].[Company], [jh7].[JobNum], [ja7].[AssemblySeq], [jh7].[ProdQty]
 ),
 
@@ -178,7 +192,7 @@ JobStatusWithInProcess AS (
             WHEN ([Calculated_NewIP] = 1 OR [Calculated_NewIP2] = 1) THEN 1 
             ELSE 0 
         END as [Calculated_InProcess]
-    FROM JobStatusBase
+    FROM JobStatusBase as [jsb1]
 ),
 
 -- Calculate status for each assembly
@@ -193,7 +207,7 @@ JobStatusWithStatus AS (
             WHEN [Calculated_MtlIssued] = 1 THEN 1
             ELSE 0
         END as [Calculated_Status]
-    FROM JobStatusWithInProcess
+    FROM JobStatusWithInProcess as [jswip1]
 ),
 
 -- Top level status (AssemblySeq = 0)
@@ -202,7 +216,7 @@ TopStatus AS (
         [JobHead6_Company],
         [JobHead6_JobNum],
         [Calculated_Status] as [Calculated_TopStatus]
-    FROM JobStatusWithStatus
+    FROM JobStatusWithStatus as [jsws1]
     WHERE [JobAsmbl6_AssemblySeq] = 0
 ),
 
@@ -211,19 +225,19 @@ AsmStatus AS (
     SELECT 
         [JobHead6_JobNum],
         [Calculated_Status]
-    FROM JobStatusWithStatus
+    FROM JobStatusWithStatus as [jsws2]
     WHERE [Calculated_DetailComplete] = 0 
       AND [JobAsmbl6_AssemblySeq] <> 0
 )
 
 -- Final result with fallback logic
 SELECT  
-    [ts].[JobHead6_Company] as [JobHead6_Company],
-    COALESCE([asms].[JobHead6_JobNum], [ts].[JobHead6_JobNum]) as [Calculated_JobNum],
+    [ts1].[JobHead6_Company] as [JobHead6_Company],
+    COALESCE([asms1].[JobHead6_JobNum], [ts1].[JobHead6_JobNum]) as [Calculated_JobNum],
     CASE
-        WHEN [ts].[Calculated_TopStatus] = 0 THEN COALESCE([asms].[Calculated_Status], 0)
-        WHEN [asms].[Calculated_Status] < [ts].[Calculated_TopStatus] THEN [asms].[Calculated_Status]
-        ELSE [ts].[Calculated_TopStatus]
+        WHEN [ts1].[Calculated_TopStatus] = 0 THEN COALESCE([asms1].[Calculated_Status], 0)
+        WHEN [asms1].[Calculated_Status] < [ts1].[Calculated_TopStatus] THEN [asms1].[Calculated_Status]
+        ELSE [ts1].[Calculated_TopStatus]
     END as [Calculated_Status]
-FROM TopStatus as [ts]
-LEFT JOIN AsmStatus as [asms] ON [ts].[JobHead6_JobNum] = [asms].[JobHead6_JobNum];
+FROM TopStatus as [ts1]
+LEFT JOIN AsmStatus as [asms1] ON [ts1].[JobHead6_JobNum] = [asms1].[JobHead6_JobNum];
